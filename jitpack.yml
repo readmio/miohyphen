@@ -1,0 +1,6 @@
+# JitPack build configuration. https://jitpack.io/docs/
+# AGP 8.6 requires JDK 17; publish the release AAR to the local Maven repo JitPack reads.
+jdk:
+  - openjdk17
+install:
+  - ./gradlew publishReleasePublicationToMavenLocal

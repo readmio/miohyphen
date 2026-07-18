@@ -1,0 +1,12 @@
+MioHyphen
+Copyright 2026 Readmio
+
+This product includes software developed at Readmio.
+
+The hyphenation algorithm is a pure-Kotlin reimplementation of Liang's TeX
+hyphenation algorithm, based on the "pyphen" reference implementation.
+
+This product bundles hyphenation pattern dictionaries (`hyph_*.dic`) from the
+LibreOffice dictionaries project, which are tri-licensed under GPL 2.0 / LGPL
+2.1 / MPL 1.1. Each language ships its own `README_hyph_*.txt` with per-language
+credits and licensing. See THIRD-PARTY-NOTICES.md.

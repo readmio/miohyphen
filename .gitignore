@@ -1,0 +1,18 @@
+# Gradle / Android build outputs
+.gradle/
+build/
+*/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local verification tooling artifacts (the .kt sources are kept)
+verify/*.jar
+verify/out/
+verify/tclasses/
+
+# NOTE: gradle/wrapper/gradle-wrapper.jar IS committed on purpose (needed by ./gradlew).
