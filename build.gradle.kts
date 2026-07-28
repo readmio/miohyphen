@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     // AGP 9+ has built-in Kotlin support, so the `org.jetbrains.kotlin.android` plugin
     // is not applied (it would error). The `kotlin { }` DSL below comes from AGP.
-    id("com.android.library") version "9.3.0"
+    id("com.android.library") version "9.3.1"
     id("maven-publish")
 }
 
@@ -12,7 +12,7 @@ plugins {
 group = "com.github.readmio"
 version = "0.1.0"
 
-// Toolchain aligned with the Readmio app (AGP 9.3.0 / Kotlin 2.4.0 / JDK 17), so this library can
+// Toolchain aligned with the Readmio app (AGP 9.3.1 / Kotlin 2.4.0 / JDK 17), so this library can
 // be used as an `includeBuild(...)` composite build from that project.
 android {
     namespace = "com.readmio.miohyphen"

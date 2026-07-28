@@ -164,7 +164,7 @@ the bundled languages.
 ./gradlew assembleRelease    # build the .aar (build/outputs/aar/MioHyphen-release.aar)
 ```
 
-Toolchain (aligned with the Readmio app): **AGP 9.3.0, Gradle 9.5.1, Kotlin 2.4.0, JDK 17+**.
+Toolchain (aligned with the Readmio app): **AGP 9.3.1, Gradle 9.5.1, Kotlin 2.4.0, JDK 17+**.
 CI builds on every push (`.github/workflows/ci.yml`).
 
 ## API documentation
