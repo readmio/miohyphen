@@ -51,13 +51,9 @@ mioHyphen.positions("bratislava", "sk_SK")             // [3, 5, 8]
 mioHyphen.hyphenateText("Ako sa máš dnes?", "sk_SK")   // hyphenates each word, keeps spaces/punctuation
 mioHyphen.availableLanguages()                         // ["cs_CZ", "de_DE", "en_US", … , "uk_UA"]
 
-// One-letter words (Slovak/Czech prepositions/conjunctions) bind to the next word so they
-// never end a line — on by default, chained across consecutive ones. The default binder is a
-// normal space + WORD JOINER (U+2060): it stays non-breaking yet still stretches under
-// justification (a plain U+00A0 would not). Configurable via SingleLetterBinding.
-mioHyphen.hyphenateText("i k nemu", "sk_SK")                                          // default: space + word joiner
-mioHyphen.hyphenateText("i k nemu", "sk_SK", SingleLetterBinding.NO_BREAK_SPACE)      // classic U+00A0
-mioHyphen.hyphenateText("i k nemu", "sk_SK", SingleLetterBinding.NONE)                // off
+// One-letter words are kept with the next word, and a paragraph-end runt is avoided — both on by
+// default. Tune them via HyphenationOptions (see Configuration below).
+mioHyphen.hyphenateText("i k nemu", "sk_SK")   // binds one-letter "i"/"k" to the next word (defaults)
 
 // custom separator instead of the soft hyphen:
 mioHyphen.forLanguage("de_DE").hyphenate("Fußballweltmeisterschaft", "·")
@@ -77,24 +73,44 @@ next word **even across inline markup**, which a per-node call cannot see:
 ```kotlin
 mioHyphen.hyphenateHtml("Oľko a<strong>zatlieskal</strong>", "sk_SK")
 // "Oľ­ko a <strong>za­tlies­kal</strong>"   — the "a" stays with the next word
-
-// the binding style is configurable, same as hyphenateText:
-mioHyphen.hyphenateHtml(html, "sk_SK", SingleLetterBinding.NO_BREAK_SPACE)   // classic U+00A0
-mioHyphen.hyphenateHtml(html, "sk_SK", SingleLetterBinding.NONE)             // no binding
 ```
 
 Binding never crosses block boundaries (`</p>`, `<br>`, list items); a one-letter word that ends a
 block is left alone. The call is idempotent and returns the input unchanged on malformed markup.
 
-### Single-letter binding options (`SingleLetterBinding`)
+## Configuration (`HyphenationOptions`)
 
-Both `hyphenateText` and `hyphenateHtml` take a `binding` parameter (default first):
+Policy — one-letter binding, break separator and runt prevention — lives in `HyphenationOptions`,
+built with a fluent `Builder` and usually set once on the instance (per-call override optional):
+
+```kotlin
+val mioHyphen = MioHyphen(
+    context,
+    HyphenationOptions.Builder()
+        .binding(SingleLetterBinding.SPACE_WORD_JOINER)   // default
+        .avoidHyphenatingLastWord(true)                   // default
+        .minimumLastLineLetters(4)                        // default
+        .build(),
+)
+
+// override for a single call:
+mioHyphen.hyphenateHtml(storyHtml, "sk_SK",
+    HyphenationOptions.Builder().minimumLastLineLetters(6).build())
+```
+
+**One-letter binding** (`binding`) — how a one-letter word is kept with the next word:
 
 | value | inserted after a one-letter word | notes |
 |---|---|---|
 | `SPACE_WORD_JOINER` | space `U+0020` + word joiner `U+2060` | **default** — non-breaking **and** stretches under justification |
-| `NO_BREAK_SPACE` | `U+00A0` | non-breaking but fixed width (gap won't stretch when justified) |
-| `NONE` | *(nothing — the plain space is kept)* | feature off |
+| `NO_BREAK_SPACE` | `U+00A0` | non-breaking, fixed width (won't stretch when justified) |
+| `NONE` | *(nothing — the plain space is kept)* | binding off |
+
+**Runt prevention** (`avoidHyphenatingLastWord` default on, `minimumLastLineLetters` default 4) — a
+*runt* is a tiny fragment stranded on a paragraph's last line. When on, the paragraph's last word
+drops trailing hyphens while the fragment after them would be shorter than `minimumLastLineLetters`
+letters (so `matematika` stays whole rather than breaking to a 2-letter last line). In HTML it
+applies per paragraph (the last word before each block boundary); only the last word is affected.
 
 ## Supported languages
 

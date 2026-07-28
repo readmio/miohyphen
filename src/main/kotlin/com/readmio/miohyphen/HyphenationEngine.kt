@@ -106,36 +106,54 @@ class HyphenationEngine internal constructor(private val dict: HyphenationDictio
      * replaced with the binding's separator (default [SingleLetterBinding.SPACE_WORD_JOINER]),
      * chaining across consecutive one-letter words; use [SingleLetterBinding.NONE] to disable.
      *
+     * Runt prevention (on by default): [avoidHyphenatingLastWord] drops trailing separators from the
+     * last word while the tail after them would be shorter than [minimumLastLineLetters] letters, so
+     * a hyphenated last word can't strand a tiny fragment (a "runt") on the last line.
+     *
      * @param text arbitrary text (a sentence, paragraph, …).
      * @param binding how one-letter words are bound (default [SingleLetterBinding.SPACE_WORD_JOINER]).
      * @param separator the string inserted at each in-word break point (default [SOFT_HYPHEN]).
+     * @param avoidHyphenatingLastWord avoid a short last-line fragment (runt) at the end.
+     * @param minimumLastLineLetters shortest allowed last fragment when [avoidHyphenatingLastWord].
      * @return [text] with soft hyphens inside words and one-letter words bound per [binding].
      */
     fun hyphenateText(
         text: String,
         binding: SingleLetterBinding = SingleLetterBinding.SPACE_WORD_JOINER,
         separator: String = SOFT_HYPHEN,
+        avoidHyphenatingLastWord: Boolean = true,
+        minimumLastLineLetters: Int = 4,
     ): String {
         val bindSep = binding.separator
         val sb = StringBuilder(text.length + text.length / 8)
         val n = text.length
         var i = 0
+        var lastWordStart = -1
+        var lastWordEnd = -1
         while (i < n) {
             if (text[i].isLetter()) {
                 val start = i
                 while (i < n && text[i].isLetter()) i++
                 // A one-letter word directly followed by a plain space: bind it to the next word.
                 if (bindSep != null && i - start == 1 && i < n && text[i] == ' ') {
-                    sb.append(text[start]).append(bindSep)
+                    lastWordStart = sb.length
+                    sb.append(text[start])
+                    lastWordEnd = sb.length
+                    sb.append(bindSep)
                     i++   // consume the original space (replaced by the binder)
                     if (i < n && text[i] == '\u2060') i++   // absorb an existing word joiner (idempotency)
                 } else {
+                    lastWordStart = sb.length
                     sb.append(hyphenate(text.substring(start, i), separator))
+                    lastWordEnd = sb.length
                 }
             } else {
                 sb.append(text[i])
                 i++
             }
+        }
+        if (avoidHyphenatingLastWord && lastWordStart >= 0) {
+            deStubLastWord(sb, lastWordStart, lastWordEnd, separator, minimumLastLineLetters)
         }
         return sb.toString()
     }
@@ -153,29 +171,48 @@ class HyphenationEngine internal constructor(private val dict: HyphenationDictio
      * `<br>`, list items, `<script>`/`<style>`); a one-letter word that ends a block is left alone.
      *
      * Malformed input is returned unchanged rather than throwing, and the transform is idempotent.
+     * Runt prevention ([avoidHyphenatingLastWord], on by default) is applied per paragraph — the last
+     * word before each block boundary won't leave fewer than [minimumLastLineLetters] letters on the
+     * last line.
      *
      * @param html an HTML fragment.
      * @param binding how one-letter words are bound (default [SingleLetterBinding.SPACE_WORD_JOINER]).
      * @param separator the string inserted at each in-word break point (default [SOFT_HYPHEN]).
+     * @param avoidHyphenatingLastWord avoid a short last-line fragment (runt) at each paragraph end.
+     * @param minimumLastLineLetters shortest allowed last fragment when [avoidHyphenatingLastWord].
      * @return [html] with soft hyphens inside text words and one-letter words bound per [binding].
      */
     fun hyphenateHtml(
         html: String,
         binding: SingleLetterBinding = SingleLetterBinding.SPACE_WORD_JOINER,
         separator: String = SOFT_HYPHEN,
+        avoidHyphenatingLastWord: Boolean = true,
+        minimumLastLineLetters: Int = 4,
     ): String = try {
-        renderHtml(tokenizeHtml(html), binding.separator, separator)
+        renderHtml(
+            tokenizeHtml(html), binding.separator, separator,
+            avoidHyphenatingLastWord, minimumLastLineLetters,
+        )
     } catch (t: Throwable) {
         html   // never throw on malformed markup — hyphenation is a best-effort enhancement
     }
 
-    private fun renderHtml(tokens: List<HtmlToken>, bindSep: String?, sep: String): String {
+    private fun renderHtml(
+        tokens: List<HtmlToken>,
+        bindSep: String?,
+        sep: String,
+        avoidLastWord: Boolean,
+        minLastLetters: Int,
+    ): String {
         val bind = bindSep != null
         val shy = '\u00AD'
         val out = StringBuilder()
         var bindPending = false          // last emitted word was a one-letter word awaiting a follower
         val gapRaw = StringBuilder()     // exact gap content (spaces + inline tags) — emitted if no bind
         val gapTags = StringBuilder()    // only the inline tags — emitted (after NBSP) if we bind
+
+        var lastWordStart = -1           // output range of the last word of the current paragraph
+        var lastWordEnd = -1
 
         for (tok in tokens) {
             when (tok.kind) {
@@ -184,11 +221,15 @@ class HyphenationEngine internal constructor(private val dict: HyphenationDictio
                 } else {
                     out.append(tok.text)
                 }
-                T_BARRIER -> {
-                    if (bind && bindPending) {   // a block/raw boundary ends the gap without binding
+                T_BARRIER -> {   // block boundary ends the paragraph
+                    if (bind && bindPending) {
                         out.append(gapRaw); gapRaw.setLength(0); gapTags.setLength(0); bindPending = false
                     }
+                    if (avoidLastWord && lastWordStart >= 0) {
+                        deStubLastWord(out, lastWordStart, lastWordEnd, sep, minLastLetters)
+                    }
                     out.append(tok.text)
+                    lastWordStart = -1; lastWordEnd = -1
                 }
                 else -> {   // T_TEXT
                     val s = tok.text
@@ -205,6 +246,7 @@ class HyphenationEngine internal constructor(private val dict: HyphenationDictio
                                 out.append(bindSep).append(gapTags)
                                 gapRaw.setLength(0); gapTags.setLength(0); bindPending = false
                             }
+                            lastWordStart = out.length
                             if (clean.length == 1) {
                                 out.append(clean)
                                 if (bind) { bindPending = true; gapRaw.setLength(0); gapTags.setLength(0) }
@@ -212,6 +254,7 @@ class HyphenationEngine internal constructor(private val dict: HyphenationDictio
                                 out.append(hyphenate(clean, sep))
                                 bindPending = false
                             }
+                            lastWordEnd = out.length
                         } else if (bind && bindPending && isHtmlSpace(c)) {
                             gapRaw.append(c); i++
                         } else {
@@ -225,6 +268,9 @@ class HyphenationEngine internal constructor(private val dict: HyphenationDictio
             }
         }
         if (bind && bindPending) out.append(gapRaw)   // one-letter word at the very end: nothing to bind
+        if (avoidLastWord && lastWordStart >= 0) {
+            deStubLastWord(out, lastWordStart, lastWordEnd, sep, minLastLetters)
+        }
         return out.toString()
     }
 
@@ -321,6 +367,30 @@ class HyphenationEngine internal constructor(private val dict: HyphenationDictio
             val start = i
             while (i < raw.length && raw[i].isLetterOrDigit()) i++
             return raw.substring(start, i).lowercase()
+        }
+
+        /**
+         * Removes trailing [sep] separators from the paragraph's last word (range [start, end) in
+         * [sb]) while the tail after the last remaining separator has fewer than [minLast] letters —
+         * so a hyphenated last word can't strand a tiny fragment on the paragraph's last line.
+         *
+         * Uses only common Kotlin stdlib (`substring`, `lastIndexOf`, `deleteRange`) — KMP-safe.
+         */
+        private fun deStubLastWord(sb: StringBuilder, start: Int, end: Int, sep: String, minLast: Int) {
+            if (sep.isEmpty() || minLast <= 0 || end <= start) return
+            val word = sb.substring(start, end)
+            val drops = ArrayList<Int>()   // separator start indices within `word`, descending
+            var searchFrom = word.length
+            while (true) {
+                val idx = word.lastIndexOf(sep, searchFrom - 1)
+                if (idx < 0) break
+                // letters remaining after this separator, once the separators after it are dropped
+                val tailLetters = (word.length - (idx + sep.length)) - drops.size * sep.length
+                if (tailLetters >= minLast) break
+                drops.add(idx)
+                searchFrom = idx
+            }
+            for (rel in drops) sb.deleteRange(start + rel, start + rel + sep.length)
         }
 
         /**

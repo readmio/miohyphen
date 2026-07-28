@@ -27,22 +27,36 @@ import java.util.concurrent.ConcurrentHashMap
  * textView.text = mioHyphen.hyphenateText(article, "de_DE")
  * ```
  *
- * All methods are thread-safe.
+ * The hyphenation policy (binding style, separator, runt prevention) is set once via
+ * [HyphenationOptions] — build it with [HyphenationOptions.Builder] and pass it here; individual
+ * calls may still override it. All methods are thread-safe.
+ *
+ * ```
+ * val mioHyphen = MioHyphen(
+ *     context,
+ *     HyphenationOptions.Builder().minimumLastLineLetters(5).build(),
+ * )
+ * ```
  *
  * @constructor Creates an instance reading dictionaries through [assets].
  * @property assets the [AssetManager] the dictionaries are read from.
  * @property assetDir folder inside `assets/` holding the `hyph_*.dic` files (default `"hyphenation"`).
+ * @property options the default hyphenation policy for this instance (default [HyphenationOptions.DEFAULT]).
  */
 class MioHyphen @JvmOverloads constructor(
     private val assets: AssetManager,
     private val assetDir: String = "hyphenation",
+    private val options: HyphenationOptions = HyphenationOptions.DEFAULT,
 ) {
     /**
      * Convenience constructor that reads dictionaries from the app's assets.
      *
      * @param context any [Context]; only its [AssetManager] is retained.
+     * @param options the default hyphenation policy (default [HyphenationOptions.DEFAULT]).
      */
-    constructor(context: Context) : this(context.assets)
+    @JvmOverloads
+    constructor(context: Context, options: HyphenationOptions = HyphenationOptions.DEFAULT) :
+        this(context.assets, options = options)
 
     private val engines = ConcurrentHashMap<String, HyphenationEngine>()
 
@@ -86,46 +100,46 @@ class MioHyphen @JvmOverloads constructor(
      * Hyphenates every alphabetic run in [text], leaving whitespace, punctuation and digits
      * untouched. This is what you usually feed to a `TextView`/Compose `Text`.
      *
-     * [binding] keeps one-letter words (Slovak/Czech `v`, `s`, `a`, `i`, …) from ending a line by
-     * replacing the following space — default [SingleLetterBinding.SPACE_WORD_JOINER] (a space that
-     * still justifies plus a word joiner); [SingleLetterBinding.NO_BREAK_SPACE] or
-     * [SingleLetterBinding.NONE] are also available.
+     * Applies this instance's policy; pass [options] to override it for a single call (build one
+     * with [HyphenationOptions.Builder] or `instanceOptions.newBuilder()`).
      *
      * @param text arbitrary text (a sentence, paragraph, …).
      * @param lang language code, e.g. `"sk_SK"`.
-     * @param binding how one-letter words are bound (default [SingleLetterBinding.SPACE_WORD_JOINER]).
-     * @return [text] with soft hyphens inside words and one-letter words bound per [binding].
+     * @param options hyphenation policy for this call (default: the instance's options).
+     * @return [text] hyphenated per [options].
      * @throws java.io.IOException if no dictionary is bundled for [lang].
      */
     @JvmOverloads
-    fun hyphenateText(
-        text: String,
-        lang: String,
-        binding: SingleLetterBinding = SingleLetterBinding.SPACE_WORD_JOINER,
-    ): String = forLanguage(lang).hyphenateText(text, binding)
+    fun hyphenateText(text: String, lang: String, options: HyphenationOptions = this.options): String =
+        forLanguage(lang).hyphenateText(
+            text, options.binding, options.separator,
+            options.avoidHyphenatingLastWord, options.minimumLastLineLetters,
+        )
 
     /**
      * HTML-aware hyphenation: transforms only text content of [html] (soft hyphens + one-letter
-     * binding), preserving all tags/attributes/custom elements and skipping `<script>`/`<style>`.
+     * binding + runt prevention), preserving all tags/attributes/custom elements and skipping
+     * `<script>`/`<style>`.
      *
      * Prefer this over calling [hyphenateText] per DOM text node: it binds a one-letter word to the
      * following word **even across inline markup** (`<strong>`, `<em>`, `<a>`, custom elements, …),
-     * which a per-node string call cannot do. Binding never crosses block boundaries. See [binding]
-     * for the binder (default a justify-friendly space + word joiner). Malformed input is returned
-     * unchanged; the transform is idempotent.
+     * which a per-node string call cannot do. Binding and runt prevention never cross block
+     * boundaries. Malformed input is returned unchanged; the transform is idempotent.
+     *
+     * Applies this instance's policy; pass [options] to override it for a single call.
      *
      * @param html an HTML fragment.
      * @param lang language code, e.g. `"sk_SK"`.
-     * @param binding how one-letter words are bound (default [SingleLetterBinding.SPACE_WORD_JOINER]).
-     * @return [html] with soft hyphens inside text words and one-letter words bound per [binding].
+     * @param options hyphenation policy for this call (default: the instance's options).
+     * @return [html] with only its text content hyphenated per [options].
      * @throws java.io.IOException if no dictionary is bundled for [lang].
      */
     @JvmOverloads
-    fun hyphenateHtml(
-        html: String,
-        lang: String,
-        binding: SingleLetterBinding = SingleLetterBinding.SPACE_WORD_JOINER,
-    ): String = forLanguage(lang).hyphenateHtml(html, binding)
+    fun hyphenateHtml(html: String, lang: String, options: HyphenationOptions = this.options): String =
+        forLanguage(lang).hyphenateHtml(
+            html, options.binding, options.separator,
+            options.avoidHyphenatingLastWord, options.minimumLastLineLetters,
+        )
 
     /**
      * Lists the language codes for which a dictionary is bundled (derived from the `hyph_*.dic`

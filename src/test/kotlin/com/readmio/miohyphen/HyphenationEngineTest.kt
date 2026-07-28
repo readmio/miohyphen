@@ -115,10 +115,10 @@ class HyphenationEngineTest {
         val j = SingleLetterBinding.SPACE_WORD_JOINER.separator!!
         assertEquals("\u0020\u2060", j)   // stretchable space + word joiner
         // chained one-letter words; multi-syllable words still hyphenate (visible separator)
-        assertEquals("i${j}k${j}ne·mu", e.hyphenateText("i k nemu", separator = "·"))
-        assertEquals("v${j}ško·le", e.hyphenateText("v škole", separator = "·"))
+        assertEquals("i${j}k${j}ne·mu", e.hyphenateText("i k nemu", separator = "·", avoidHyphenatingLastWord = false))
+        assertEquals("v${j}ško·le", e.hyphenateText("v škole", separator = "·", avoidHyphenatingLastWord = false))
         // only one-letter words bind; "on"/"ona" (2+ letters) keep a normal space
-        assertEquals("a${j}on a${j}ona", e.hyphenateText("a on a ona", separator = "·"))
+        assertEquals("a${j}on a${j}ona", e.hyphenateText("a on a ona", separator = "·", avoidHyphenatingLastWord = false))
     }
 
     @Test fun `binding style is configurable (nbsp)`() {
@@ -126,13 +126,13 @@ class HyphenationEngineTest {
         val nb = SingleLetterBinding.NO_BREAK_SPACE.separator!!
         assertEquals("\u00A0", nb)
         assertEquals("i${nb}k${nb}ne·mu",
-            e.hyphenateText("i k nemu", SingleLetterBinding.NO_BREAK_SPACE, "·"))
+            e.hyphenateText("i k nemu", SingleLetterBinding.NO_BREAK_SPACE, "·", avoidHyphenatingLastWord = false))
     }
 
     @Test fun `single-letter binding can be turned off`() {
         val e = engine("sk_SK")
         assertEquals("i k ne·mu",
-            e.hyphenateText("i k nemu", SingleLetterBinding.NONE, "·"))
+            e.hyphenateText("i k nemu", SingleLetterBinding.NONE, "·", avoidHyphenatingLastWord = false))
     }
 
     // --- hyphenateHtml: binding across inline markup boundaries ---------------------------------
@@ -142,25 +142,25 @@ class HyphenationEngineTest {
         val j = SingleLetterBinding.SPACE_WORD_JOINER.separator!!
         assertEquals(
             "Oľ·ko a${j}<strong>za·tlies·kal od ra·dos·ti",
-            e.hyphenateHtml("Oľko a<strong>zatlieskal od radosti", separator = "·"),
+            e.hyphenateHtml("Oľko a<strong>zatlieskal od radosti", separator = "·", avoidHyphenatingLastWord = false),
         )
         // previously-working trailing-space case must not regress (one binder, no doubled space)
         assertEquals(
             "vy·has·lo a${j}<strong>ener·gia vy·pr·cha·la",
-            e.hyphenateHtml("vyhaslo a <strong>energia vyprchala", separator = "·"),
+            e.hyphenateHtml("vyhaslo a <strong>energia vyprchala", separator = "·", avoidHyphenatingLastWord = false),
         )
     }
 
     @Test fun `html binding handles all space-placement variants`() {
         val e = engine("sk_SK")
         val expected = "a${SingleLetterBinding.SPACE_WORD_JOINER.separator}<strong>dom"
-        assertEquals(expected, e.hyphenateHtml("a <strong>dom", separator = "·"))
-        assertEquals(expected, e.hyphenateHtml("a<strong> dom", separator = "·"))
-        assertEquals(expected, e.hyphenateHtml("a<strong>dom", separator = "·"))
+        assertEquals(expected, e.hyphenateHtml("a <strong>dom", separator = "·", avoidHyphenatingLastWord = false))
+        assertEquals(expected, e.hyphenateHtml("a<strong> dom", separator = "·", avoidHyphenatingLastWord = false))
+        assertEquals(expected, e.hyphenateHtml("a<strong>dom", separator = "·", avoidHyphenatingLastWord = false))
         // also across a custom element
         assertEquals(
             "oba·liť a${SingleLetterBinding.SPACE_WORD_JOINER.separator}<sound>nie·co",
-            e.hyphenateHtml("obaliť a <sound> nieco", separator = "·"),
+            e.hyphenateHtml("obaliť a <sound> nieco", separator = "·", avoidHyphenatingLastWord = false),
         )
     }
 
@@ -184,11 +184,11 @@ class HyphenationEngineTest {
         val e = engine("sk_SK")
         assertEquals(
             "to·to je <script>var a = bratislava;</script> mes·to",
-            e.hyphenateHtml("toto je <script>var a = bratislava;</script> mesto", separator = "·"),
+            e.hyphenateHtml("toto je <script>var a = bratislava;</script> mesto", separator = "·", avoidHyphenatingLastWord = false),
         )
         assertEquals(
             "zvuk <sound file=\"x.mp3\"/> tu",
-            e.hyphenateHtml("zvuk <sound file=\"x.mp3\"/> tu", separator = "·"),
+            e.hyphenateHtml("zvuk <sound file=\"x.mp3\"/> tu", separator = "·", avoidHyphenatingLastWord = false),
         )
     }
 
@@ -200,6 +200,70 @@ class HyphenationEngineTest {
         e.hyphenateHtml("<strong>unterminated a")
         e.hyphenateHtml("a <!-- comment")
         e.hyphenateHtml("cena a < b eur")
+    }
+
+    // --- runt prevention (avoid a tiny fragment on the paragraph's last line) --------------------
+
+    @Test fun `runt prevention drops the last hyphen of the last word by default`() {
+        val e = engine("sk_SK")
+        // "ka" (2) < 4 -> drop that hyphen; "tika" (4) >= 4 -> stop
+        assertEquals("ma·te·ma·tika", e.hyphenateText("matematika", separator = "·"))
+        assertEquals("in·for·mácia", e.hyphenateText("informácia", separator = "·"))
+        // only the LAST word is affected; earlier words keep their hyphens
+        assertEquals("veľ·ká ma·te·ma·tika", e.hyphenateText("veľká matematika", separator = "·"))
+    }
+
+    @Test fun `runt prevention can be turned off`() {
+        val e = engine("sk_SK")
+        assertEquals("ma·te·ma·ti·ka",
+            e.hyphenateText("matematika", separator = "·", avoidHyphenatingLastWord = false))
+    }
+
+    @Test fun `runt threshold is configurable`() {
+        val e = engine("sk_SK")
+        // min=2: "ka" (2) >= 2 -> keep all hyphens
+        assertEquals("ma·te·ma·ti·ka",
+            e.hyphenateText("matematika", separator = "·", minimumLastLineLetters = 2))
+        // min=3: "ka" (2) < 3 -> drop; "tika" (4) >= 3 -> stop
+        assertEquals("ma·te·ma·tika",
+            e.hyphenateText("matematika", separator = "·", minimumLastLineLetters = 3))
+    }
+
+    @Test fun `html runt prevention applies per paragraph`() {
+        val e = engine("sk_SK")
+        assertEquals(
+            "<p>ide·me na ma·te·ma·tika</p><p>krás·na do·vo·lenka</p>",
+            e.hyphenateHtml("<p>ideme na matematika</p><p>krásna dovolenka</p>", separator = "·"),
+        )
+        // off -> last words fully hyphenated again
+        assertEquals(
+            "<p>ide·me na ma·te·ma·ti·ka</p><p>krás·na do·vo·len·ka</p>",
+            e.hyphenateHtml("<p>ideme na matematika</p><p>krásna dovolenka</p>",
+                separator = "·", avoidHyphenatingLastWord = false),
+        )
+    }
+
+    @Test fun `options builder sets fields and keeps defaults`() {
+        val d = HyphenationOptions.DEFAULT
+        assertEquals(SingleLetterBinding.SPACE_WORD_JOINER, d.binding)
+        assertEquals(4, d.minimumLastLineLetters)
+        assertTrue(d.avoidHyphenatingLastWord)
+        assertEquals(HyphenationEngine.SOFT_HYPHEN, d.separator)
+
+        val o = HyphenationOptions.Builder()
+            .minimumLastLineLetters(6)
+            .binding(SingleLetterBinding.NO_BREAK_SPACE)
+            .avoidHyphenatingLastWord(false)
+            .build()
+        assertEquals(6, o.minimumLastLineLetters)
+        assertEquals(SingleLetterBinding.NO_BREAK_SPACE, o.binding)
+        assertEquals(false, o.avoidHyphenatingLastWord)
+        assertEquals(HyphenationEngine.SOFT_HYPHEN, o.separator)   // untouched -> still default
+
+        // newBuilder() tweaks one field and keeps the rest
+        val o2 = o.newBuilder().minimumLastLineLetters(2).build()
+        assertEquals(2, o2.minimumLastLineLetters)
+        assertEquals(SingleLetterBinding.NO_BREAK_SPACE, o2.binding)
     }
 
     @Test fun `too-short words are not hyphenated`() {
