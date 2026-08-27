@@ -216,21 +216,24 @@ Ready-to-paste block:
 
 <h3>Hyphenation dictionaries (LibreOffice / hunspell patterns)</h3>
 <p>This app bundles TeX/Liang hyphenation pattern files (<code>hyph_*.dic</code>) from the
-   LibreOffice dictionaries project, used under the
-   <a href="https://www.mozilla.org/MPL/1.1/">Mozilla Public License 1.1</a>
-   (tri-licensed GPL 2.0 / LGPL 2.1 / MPL 1.1). Source and per-language credits:
+   LibreOffice dictionaries project. Their licenses differ per language - BSD-style, LGPL,
+   LPPL, MPL and GPL all appear across the bundled set. Source and per-language credits:
    <a href="https://git.libreoffice.org/dictionaries">git.libreoffice.org/dictionaries</a>.
    Per-language attribution is in the <code>README_hyph_*.txt</code> files shipped with the patterns.</p>
 ```
 
-Keep the bundled `README_hyph_*.txt` files (each language's attribution) in the AAR/APK — do not
-strip them. Choose **LGPL-2.1 or MPL-1.1** from the dictionaries' tri-license (not GPL) so your app
-stays closed-source; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Not legal advice — for a
-commercial release have the per-language terms reviewed.
+Keep the bundled `README_hyph_*.txt` files (each language's attribution) **and**
+`assets/hyphenation/licenses/` (the full license texts) in the AAR/APK — do not strip them, or
+reproduce them on your app's open-source-licenses screen. **The dictionaries are not uniformly
+licensed**: some are BSD-style, some LGPL/MPL, and several state GPL with no lesser alternative —
+see the per-language table in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Ship only the
+languages whose terms suit your product (deleting a `hyph_<lang>.dic` needs no code change). Not
+legal advice — for a commercial release have the per-language terms reviewed.
 
 ## License
 
 Code: **Apache-2.0** (`LICENSE`).
 
-The bundled hyphenation dictionaries are third-party (LibreOffice, tri-licensed GPL/LGPL/MPL, with
-per-language terms). **Read [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) before redistributing.**
+The bundled hyphenation dictionaries are third-party (LibreOffice) and **not uniformly licensed** -
+terms vary per language, from BSD-style to GPL. **Read
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) before redistributing.**
