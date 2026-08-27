@@ -222,12 +222,13 @@ Ready-to-paste block:
    Per-language attribution is in the <code>README_hyph_*.txt</code> files shipped with the patterns.</p>
 ```
 
-Keep the bundled `README_hyph_*.txt` files (each language's attribution) in the AAR/APK — do not
-strip them. **The dictionaries are not uniformly licensed**: some are BSD-style, some LGPL/MPL, and
-several state GPL with no lesser alternative — see the per-language table in
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Ship only the languages whose terms suit your
-product (deleting a `hyph_<lang>.dic` needs no code change). Not legal advice — for a commercial
-release have the per-language terms reviewed.
+Keep the bundled `README_hyph_*.txt` files (each language's attribution) **and**
+`assets/hyphenation/licenses/` (the full license texts) in the AAR/APK — do not strip them, or
+reproduce them on your app's open-source-licenses screen. **The dictionaries are not uniformly
+licensed**: some are BSD-style, some LGPL/MPL, and several state GPL with no lesser alternative —
+see the per-language table in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Ship only the
+languages whose terms suit your product (deleting a `hyph_<lang>.dic` needs no code change). Not
+legal advice — for a commercial release have the per-language terms reviewed.
 
 ## License
 
